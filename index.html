@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="auto">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Ante 4B · Chronological Pre-Train Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
+<style>
+  /* Crisp light palette by default; dark when OS prefers dark in auto mode OR data-theme="dark" */
+  :root {
+    --bg: #f7f6f2;
+    --fg: #14171a;
+    --surface: #ffffff;
+    --surface-2: #efede6;
+    --ink-muted: #5c646d;
+    --line: #dad6cc;
+    --ok: #0e7a49;
+    --warn: #a85d08;
+    --c1: #1c5aa6;
+    --c2: #0e7a49;
+    --c3: #c26d0a;
+    --c4: #6b3fa0;
+    --bar-todo: rgba(92, 100, 109, 0.22);
+    --map-land: rgba(20, 23, 26, 0.08);
+    --map-stroke: rgba(20, 23, 26, 0.28);
+    --map-grid: rgba(20, 23, 26, 0.08);
+    --sans: var(--font-sans, -apple-system, BlinkMacSystemFont, "Inter", "Helvetica Neue", Arial, sans-serif);
+    --mono: var(--font-mono, ui-monospace, "SF Mono", Menlo, Monaco, monospace);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root[data-theme="auto"] {
+      --bg: #0e1116;
+      --fg: #eef1f5;
+      --surface: #141922;
+      --surface-2: #1c2330;
+      --ink-muted: #8b96a6;
+      --line: rgba(255, 255, 255, 0.11);
+      --ok: #3dd68c;
+      --warn: #f5b942;
+      --c1: #5ea3ff;
+      --c2: #3dd68c;
+      --c3: #f5b942;
+      --c4: #c084fc;
+      --bar-todo: rgba(139, 150, 166, 0.26);
+      --map-land: rgba(238, 241, 245, 0.09);
+      --map-stroke: rgba(238, 241, 245, 0.24);
+      --map-grid: rgba(238, 241, 245, 0.07);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f7f6f2;
+    --fg: #14171a;
+    --surface: #ffffff;
+    --surface-2: #efede6;
+    --ink-muted: #5c646d;
+    --line: #dad6cc;
+    --ok: #0e7a49;
+    --warn: #a85d08;
+    --c1: #1c5aa6;
+    --c2: #0e7a49;
+    --c3: #c26d0a;
+    --c4: #6b3fa0;
+    --bar-todo: rgba(92, 100, 109, 0.22);
+    --map-land: rgba(20, 23, 26, 0.08);
+    --map-stroke: rgba(20, 23, 26, 0.28);
+    --map-grid: rgba(20, 23, 26, 0.08);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1116;
+    --fg: #eef1f5;
+    --surface: #141922;
+    --surface-2: #1c2330;
+    --ink-muted: #8b96a6;
+    --line: rgba(255, 255, 255, 0.11);
+    --ok: #3dd68c;
+    --warn: #f5b942;
+    --c1: #5ea3ff;
+    --c2: #3dd68c;
+    --c3: #f5b942;
+    --c4: #c084fc;
+    --bar-todo: rgba(139, 150, 166, 0.26);
+    --map-land: rgba(238, 241, 245, 0.09);
+    --map-stroke: rgba(238, 241, 245, 0.24);
+    --map-grid: rgba(238, 241, 245, 0.07);
+  }
+
+  /* Zero rounded corners anywhere */
+  *, *::before, *::after { box-sizing: border-box; border-radius: 0 !important; }
+
+  body {
+    margin: 0;
+    padding: clamp(16px, 2.8vw, 34px);
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--sans);
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  /* Top control strip */
+  .top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    border-bottom: 2px solid var(--fg);
+    padding-bottom: 10px;
+  }
+  .brand {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .brand-name {
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .brand-sub {
+    font-size: 11.5px;
+    font-family: var(--mono);
+    color: var(--ink-muted);
+  }
+  .top-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .theme-switch {
+    display: inline-flex;
+    border: 1px solid var(--line);
+    background: var(--surface);
+  }
+  .theme-btn {
+    border: none;
+    border-right: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-muted);
+    font-size: 11px;
+    font-family: var(--mono);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 5px 9px;
+    cursor: pointer;
+  }
+  .theme-btn:last-child { border-right: none; }
+  .theme-btn.on { background: var(--fg); color: var(--bg); }
+
+  /* Hero Chronometer */
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 20px 22px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .hero-top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--ink-muted);
+    font-weight: 700;
+  }
+  .date-row {
+    display: flex;
+    align-items: baseline;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 4px;
+  }
+  .hero-date {
+    font-size: clamp(30px, 4.4vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1.02;
+  }
+  .hero-sub { font-size: 13px; color: var(--ink-muted); font-family: var(--mono); }
+  .anchor-line { font-size: 12.5px; color: var(--ink-muted); margin-top: 4px; }
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 10px;
+    font-size: 11.5px;
+    font-family: var(--mono);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: color-mix(in srgb, var(--ok) 12%, transparent);
+    border: 1px solid var(--ok);
+    color: var(--ok);
+    white-space: nowrap;
+  }
+  .status-pill.idle {
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+    border-color: var(--warn);
+    color: var(--warn);
+  }
+  .sq-dot {
+    width: 7px;
+    height: 7px;
+    background: currentColor;
+    animation: blink 2s step-end infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.28; } }
+
+  /* Progress tracks */
+  .track-group { display: flex; flex-direction: column; gap: 11px; }
+  .track-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-bottom: 5px;
+  }
+  .track-header strong { color: var(--fg); font-family: var(--mono); font-weight: 700; }
+  .bar-outer {
+    position: relative;
+    height: 11px;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%;
+    background: var(--c1);
+    transition: width 0.5s ease;
+  }
+  .bar-fill.year-fill { background: var(--c3); }
+  .bar-ticks {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10.5px;
+    font-family: var(--mono);
+    color: var(--ink-muted);
+    margin-top: 4px;
+  }
+
+  /* KPI Grid */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+  }
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 14px 16px;
+  }
+  .kpi-label {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--ink-muted);
+    font-weight: 700;
+  }
+  .kpi-val {
+    font-size: 21px;
+    font-weight: 800;
+    font-family: var(--mono);
+    margin-top: 4px;
+    letter-spacing: -0.02em;
+  }
+  .kpi-sub { font-size: 11.5px; color: var(--ink-muted); margin-top: 4px; }
+  .kpi-sub .hi { color: var(--ok); font-weight: 700; }
+
+  /* Grids & Cards */
+  .grid-2 { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; }
+  .grid-charts { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    padding: 16px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    flex-wrap: wrap;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 8px;
+  }
+  .card-title { font-size: 13.5px; font-weight: 750; letter-spacing: 0.01em; text-transform: uppercase; }
+  .card-meta { font-size: 11px; color: var(--ink-muted); font-family: var(--mono); }
+
+  /* Map */
+  .map-box {
+    position: relative;
+    overflow: hidden;
+    background: var(--surface-2);
+    border: 1px solid var(--line);
+  }
+  .map-svg { width: 100%; height: 215px; display: block; }
+  .node-specs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px 14px;
+    font-size: 12px;
+  }
+  .spec-item { display: flex; flex-direction: column; gap: 1px; }
+  .spec-k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-muted); font-weight: 700; }
+  .spec-v { font-family: var(--mono); font-size: 11.5px; line-height: 1.35; word-break: break-word; }
+
+  /* Vintages + Forecast */
+  .vintage-row { display: flex; flex-wrap: wrap; gap: 5px; }
+  .vchip {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    padding: 3px 8px;
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--ink-muted);
+  }
+  .vchip.saved {
+    background: color-mix(in srgb, var(--ok) 11%, transparent);
+    border-color: var(--ok);
+    color: var(--ok);
+    font-weight: 700;
+  }
+  .vchip.active {
+    background: color-mix(in srgb, var(--c3) 13%, transparent);
+    border-color: var(--c3);
+    color: var(--c3);
+    font-weight: 700;
+  }
+  .forecast-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .forecast-table th {
+    text-align: left;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--ink-muted);
+    padding: 4px 0 6px;
+    border-bottom: 1px solid var(--line);
+  }
+  .forecast-table td {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .forecast-table td.num { text-align: right; font-family: var(--mono); }
+  .forecast-table tr:last-child td { border-bottom: none; font-weight: 700; }
+
+  /* Charts */
+  .chart-wrap { position: relative; width: 100%; height: 245px; }
+  .seg-btns { display: inline-flex; border: 1px solid var(--line); background: var(--surface-2); }
+  .seg-btn {
+    border: none;
+    border-right: 1px solid var(--line);
+    background: transparent;
+    color: var(--ink-muted);
+    font-size: 10.5px;
+    font-family: var(--mono);
+    font-weight: 600;
+    padding: 4px 8px;
+    cursor: pointer;
+  }
+  .seg-btn:last-child { border-right: none; }
+  .seg-btn.on { background: var(--fg); color: var(--bg); }
+
+  .foot {
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-family: var(--mono);
+    border-top: 1px solid var(--line);
+    padding-top: 10px;
+  }
+
+  @media (max-width: 640px) {
+    .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .grid-2, .grid-charts { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 780px) {
+    .grid-2 { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <!-- TOP BAR WITH AUTO/LIGHT/DARK SWITCHER -->
+  <header class="top-bar">
+    <div class="brand">
+      <span class="brand-name">Ante 4B · Pre-Train Tracker</span>
+      <span class="brand-sub">ordered-v2 · 1800–2000 chronological stream</span>
+    </div>
+    <div class="top-controls">
+      <div class="status-pill" id="status-pill"><span class="sq-dot"></span><span id="status-text">LIVE</span></div>
+      <div class="theme-switch" role="group" aria-label="Color theme">
+        <button class="theme-btn on" data-set-theme="auto" type="button">Auto</button>
+        <button class="theme-btn" data-set-theme="light" type="button">Light</button>
+        <button class="theme-btn" data-set-theme="dark" type="button">Dark</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- HERO CHRONOMETER -->
+  <section class="hero">
+    <div class="hero-top">
+      <div>
+        <div class="eyebrow">Trained Chronologically Up To</div>
+        <div class="date-row">
+          <div class="hero-date" id="hero-date">—</div>
+          <div class="hero-sub" id="hero-sub">—</div>
+        </div>
+        <div class="anchor-line" id="hero-anchor"></div>
+      </div>
+    </div>
+
+    <div class="track-group">
+      <div>
+        <div class="track-header">
+          <span>Entire Pre-Train Progress (1800 → 2000 · 25% replay)</span>
+          <strong id="overall-label">—</strong>
+        </div>
+        <div class="bar-outer"><div class="bar-fill" id="overall-bar" style="width:0%"></div></div>
+        <div class="bar-ticks">
+          <span>1800 (0B)</span>
+          <span>1949 (10.1B)</span>
+          <span>1968 (45.8B)</span>
+          <span>1980 (79.4B)</span>
+          <span>1990 (124.8B)</span>
+          <span>2000 (242.1B)</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="track-header">
+          <span id="year-track-title">Current Year Progress</span>
+          <strong id="year-label">—</strong>
+        </div>
+        <div class="bar-outer"><div class="bar-fill year-fill" id="year-bar" style="width:0%"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 KPIs -->
+  <section class="kpi-grid">
+    <div class="kpi">
+      <div class="kpi-label">Trained Tokens</div>
+      <div class="kpi-val" id="kpi-tokens">—</div>
+      <div class="kpi-sub" id="kpi-steps">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Live Throughput</div>
+      <div class="kpi-val" id="kpi-toks">—</div>
+      <div class="kpi-sub" id="kpi-eff">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Loss &amp; Grad Norm</div>
+      <div class="kpi-val" id="kpi-loss">—</div>
+      <div class="kpi-sub" id="kpi-gn">—</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Node Headroom</div>
+      <div class="kpi-val" id="kpi-hbm">—</div>
+      <div class="kpi-sub" id="kpi-sys">—</div>
+    </div>
+  </section>
+
+  <!-- COMPUTE LOCATION + VINTAGES/FORECAST -->
+  <section class="grid-2">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Where It’s Training Right Now</div>
+        <div class="card-meta" id="loc-zone">—</div>
+      </div>
+      <div class="map-box">
+        <svg class="map-svg" id="loc-map" viewBox="0 0 560 220" preserveAspectRatio="xMidYMid meet" aria-label="TPU Datacenter Location Map">
+          <g stroke="var(--map-grid)" stroke-width="1">
+            <line x1="0" y1="55" x2="560" y2="55" />
+            <line x1="0" y1="110" x2="560" y2="110" />
+            <line x1="0" y1="165" x2="560" y2="165" />
+            <line x1="112" y1="0" x2="112" y2="220" />
+            <line x1="224" y1="0" x2="224" y2="220" />
+            <line x1="336" y1="0" x2="336" y2="220" />
+            <line x1="448" y1="0" x2="448" y2="220" />
+          </g>
+          <g fill="var(--map-land)" stroke="var(--map-stroke)" stroke-width="1.1">
+            <path d="M135,148 L152,140 L172,135 L189,144 L208,140 L216,125 L205,112 L195,103 L185,84 L176,65 L168,46 L154,32 L144,44 L147,65 L140,86 L150,104 L138,119 L142,133 L124,144 Z" />
+            <path d="M98,121 L119,115 L127,98 L120,83 L103,86 L92,102 L94,116 Z" />
+            <path d="M130,220 L132,184 L158,174 L190,168 L226,158 L258,149 L275,137 L292,123 L309,113 L327,108 L345,108 L359,98 L366,77 L378,56 L395,55 L402,75 L395,97 L412,104 L434,108 L475,112 L530,118 L560,128 L560,220 Z" />
+            <path d="M312,0 L318,22 L338,34 L365,24 L388,18 L412,35 L435,54 L462,48 L476,18 L485,0 Z" />
+          </g>
+          <text x="238" y="88" fill="var(--ink-muted)" fill-opacity="0.55" font-size="10" font-family="var(--mono)" letter-spacing="2.5">NORTH SEA</text>
+          <path d="M198,136 Q266,95 335,106" fill="none" stroke="var(--c1)" stroke-width="1.8" stroke-dasharray="4 4" />
+          <path d="M335,106 Q315,126 297,131" fill="none" stroke="var(--c2)" stroke-width="1.5" />
+          <!-- London pin (sharp square) -->
+          <rect x="194" y="132" width="8" height="8" fill="var(--c1)" />
+          <text x="198" y="154" text-anchor="middle" fill="var(--fg)" font-size="10.5" font-weight="700">London</text>
+          <text x="198" y="165" text-anchor="middle" fill="var(--ink-muted)" font-size="9" font-family="var(--mono)">Control · 480 km</text>
+          <!-- R2 WEUR pin (sharp diamond/square) -->
+          <rect x="293" y="127" width="7" height="7" fill="var(--c4)" />
+          <text x="288" y="147" text-anchor="end" fill="var(--c4)" font-size="9.5" font-weight="700" font-family="var(--mono)">R2 WEUR</text>
+          <!-- Active TPU pin (sharp square beacon + sharp callout box) -->
+          <g id="tpu-pin">
+            <rect x="323" y="94" width="24" height="24" fill="none" stroke="var(--ok)" stroke-width="1.2" stroke-opacity="0.55">
+              <animate attributeName="stroke-opacity" values="0.7;0.1;0.7" dur="2.2s" repeatCount="indefinite" />
+            </rect>
+            <rect x="330" y="101" width="10" height="10" fill="var(--ok)" stroke="var(--surface)" stroke-width="1.5" />
+            <rect x="346" y="84" width="205" height="44" fill="var(--surface)" stroke="var(--ok)" stroke-width="1.2" />
+            <text x="355" y="101" fill="var(--ok)" font-size="11" font-weight="700" id="pin-title">Eemshaven, Netherlands</text>
+            <text x="355" y="116" fill="var(--ink-muted)" font-size="9" font-family="var(--mono)" id="pin-sub">europe-west4-a · TPU v6e-1</text>
+          </g>
+        </svg>
+      </div>
+      <div class="node-specs" id="node-specs"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Time-Locked Vintages &amp; CU Forecast</div>
+        <div class="card-meta" id="vintage-meta">—</div>
+      </div>
+      <div>
+        <div class="spec-k" style="margin-bottom:6px">Saved on R2 (permanent) &amp; Upcoming Annual Vintages</div>
+        <div class="vintage-row" id="vintage-chips"></div>
+      </div>
+      <div>
+        <div class="spec-k" style="margin-bottom:6px">Projected Pre-Train Reach at Current Live Pace</div>
+        <table class="forecast-table">
+          <thead>
+            <tr><th>Budget Milestone</th><th style="text-align:right">Est. Date</th><th style="text-align:right">CU</th><th style="text-align:right">%</th></tr>
+          </thead>
+          <tbody id="forecast-body"></tbody>
+        </table>
+      </div>
+      <div class="kpi-sub" id="econ-note" style="margin-top:auto"></div>
+    </div>
+  </section>
+
+  <!-- CHARTS -->
+  <section class="grid-charts">
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Corpus Volume Across 1800–2000</div>
+        <div class="card-meta" id="corpus-meta">181.5B raw · 242.1B trained</div>
+      </div>
+      <div class="chart-wrap"><canvas id="yearChart"></canvas></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <div class="card-title">Training Loss Trajectory</div>
+        <div class="seg-btns">
+          <button class="seg-btn on" id="btn-full" type="button">1800–1969</button>
+          <button class="seg-btn" id="btn-zoom" type="button">B300 → TPU Handoff</button>
+        </div>
+      </div>
+      <div class="chart-wrap"><canvas id="lossChart"></canvas></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span id="foot-left">Ante 4B · ordered-v2</span>
+    <span id="foot-right">—</span>
+  </footer>
+</div>
+
+<script>
+const EMBEDDED_DATA = {"generated_at_utc": "2026-11-24T15:21:46Z", "public_mode": true, "run_name": "ante-4b-s1", "model": {"name": "Ante 4B (Qwen3.5 Hybrid)", "params_b": 3.738, "precision": "Pure BF16 compute \u00b7 FP32 masters & grad acc", "arch": "24 GDN (Pallas v3 Dual-MXU) + 8 Gated Attn (Splash)"}, "progress": {"current_step": 22193, "total_steps": 115431, "remaining_steps": 93238, "trained_tokens_b": 46.542, "total_trained_tokens_b": 242.076, "total_raw_tokens_b": 181.496, "overall_pct": 19.23, "years_elapsed": 169.35, "years_total": 201, "years_pct": 84.25, "date": {"year": 1969, "month_name": "May", "month_short": "May", "day": 7, "date_display": "May 7, 1969", "iso_date": "1969-05-07", "year_start_step": 21832, "year_end_step": 22875, "steps_done_in_year": 361, "steps_total_in_year": 1043, "year_pct": 34.61, "year_raw_tokens_b": 1.641, "top_lanes": ["papers_x", "techreports", "books_x"], "historical_anchor": "Apollo 11 Moon landing (Jul 1969) \u00b7 ARPANET first message (Oct 1969)"}, "steps_to_next_vintage": 682, "hours_to_next_vintage": 30.6}, "live": {"is_running": true, "heartbeat_utc": "2026-11-24T15:19:54Z", "loss": 2.1834, "grad_norm": 0.1193, "tok_per_s": 13358.0, "tok_per_s_per_cu": 2624.0, "mfu_pct": 35.0, "step_seconds": 157.0, "optim_seconds": 12.73, "slice1_tok_per_s": 10330, "g4_tok_per_s_per_cu": 1464, "hbm_used_gib": 21.1, "hbm_peak_gib": 29.37, "hbm_limit_gib": 31.24, "ram_free_gb": 52.8, "disk_free_gb": 161.5, "cu_per_hr": 5.09, "session": {"active": true, "session_name": null, "accelerator": "V6E1", "variant": "TPU", "location": {"region": "europe-west4", "city": "Eemshaven", "country": "Netherlands", "detail": "Eemshaven, Netherlands \u00b7 Google Cloud North Sea Wind DC", "lat": 53.44, "lon": 6.83, "km_from_london": 480, "r2_coloc": "Cloudflare R2 WEUR (341 MiB/s \u2193 \u00b7 81.5 MB/s \u2191)", "map_scope": "europe", "zone": "europe-west4-a"}}}, "vintages": {"saved": [1949, 1959, 1968], "next_year": 1969, "next_step": 22875, "checkpoints_on_r2": [22129, 22155, 22180]}, "economics": {"net_tokens_per_1k_cu_b": 9.17, "tokens_per_ultra_month_b": 18.35, "cu_remaining_to_2000": 21315, "ultra_months_to_2000": 10.7, "forecast": [{"label": "Current balance (~2,550 CU)", "cu": 2550, "step": 33347, "date": "Mar 4, 1978", "year": 1978, "pct": 28.9}, {"label": "+2 months Ultra (+4,000 CU)", "cu": 6550, "step": 50845, "date": "Aug 20, 1987", "year": 1987, "pct": 44.0}, {"label": "+5 months Ultra (+10,000 CU)", "cu": 12550, "step": 77091, "date": "Nov 2, 1995", "year": 1995, "pct": 66.8}, {"label": "Full 1800\u20132000 completion", "cu": 21315, "step": 115431, "date": "Dec 31, 2000", "year": 2000, "pct": 100.0}]}, "charts": {"year_bars": [{"y": 1800, "raw_b": 0.0054, "end_step": 3, "status": "done"}, {"y": 1801, "raw_b": 0.0006, "end_step": 6, "status": "done"}, {"y": 1802, "raw_b": 0.0003, "end_step": 9, "status": "done"}, {"y": 1803, "raw_b": 0.0006, "end_step": 13, "status": "done"}, {"y": 1804, "raw_b": 0.0012, "end_step": 16, "status": "done"}, {"y": 1805, "raw_b": 0.0018, "end_step": 19, "status": "done"}, {"y": 1806, "raw_b": 0.0021, "end_step": 22, "status": "done"}, {"y": 1807, "raw_b": 0.0021, "end_step": 25, "status": "done"}, {"y": 1808, "raw_b": 0.0023, "end_step": 28, "status": "done"}, {"y": 1809, "raw_b": 0.0028, "end_step": 32, "status": "done"}, {"y": 1810, "raw_b": 0.0015, "end_step": 35, "status": "done"}, {"y": 1811, "raw_b": 0.0023, "end_step": 38, "status": "done"}, {"y": 1812, "raw_b": 0.0025, "end_step": 41, "status": "done"}, {"y": 1813, "raw_b": 0.0018, "end_step": 44, "status": "done"}, {"y": 1814, "raw_b": 0.0018, "end_step": 47, "status": "done"}, {"y": 1815, "raw_b": 0.0023, "end_step": 51, "status": "done"}, {"y": 1816, "raw_b": 0.0013, "end_step": 54, "status": "done"}, {"y": 1817, "raw_b": 0.003, "end_step": 57, "status": "done"}, {"y": 1818, "raw_b": 0.0023, "end_step": 60, "status": "done"}, {"y": 1819, "raw_b": 0.0038, "end_step": 63, "status": "done"}, {"y": 1820, "raw_b": 0.0039, "end_step": 66, "status": "done"}, {"y": 1821, "raw_b": 0.0032, "end_step": 70, "status": "done"}, {"y": 1822, "raw_b": 0.0039, "end_step": 73, "status": "done"}, {"y": 1823, "raw_b": 0.004, "end_step": 76, "status": "done"}, {"y": 1824, "raw_b": 0.0041, "end_step": 79, "status": "done"}, {"y": 1825, "raw_b": 0.0037, "end_step": 82, "status": "done"}, {"y": 1826, "raw_b": 0.0041, "end_step": 85, "status": "done"}, {"y": 1827, "raw_b": 0.0046, "end_step": 88, "status": "done"}, {"y": 1828, "raw_b": 0.0047, "end_step": 92, "status": "done"}, {"y": 1829, "raw_b": 0.0036, "end_step": 95, "status": "done"}, {"y": 1830, "raw_b": 0.0064, "end_step": 98, "status": "done"}, {"y": 1831, "raw_b": 0.0085, "end_step": 101, "status": "done"}, {"y": 1832, "raw_b": 0.0073, "end_step": 104, "status": "done"}, {"y": 1833, "raw_b": 0.0072, "end_step": 107, "status": "done"}, {"y": 1834, "raw_b": 0.0066, "end_step": 111, "status": "done"}, {"y": 1835, "raw_b": 0.0067, "end_step": 114, "status": "done"}, {"y": 1836, "raw_b": 0.0065, "end_step": 117, "status": "done"}, {"y": 1837, "raw_b": 0.0065, "end_step": 120, "status": "done"}, {"y": 1838, "raw_b": 0.0063, "end_step": 123, "status": "done"}, {"y": 1839, "raw_b": 0.0075, "end_step": 126, "status": "done"}, {"y": 1840, "raw_b": 0.0076, "end_step": 130, "status": "done"}, {"y": 1841, "raw_b": 0.0073, "end_step": 133, "status": "done"}, {"y": 1842, "raw_b": 0.0082, "end_step": 136, "status": "done"}, {"y": 1843, "raw_b": 0.009, "end_step": 139, "status": "done"}, {"y": 1844, "raw_b": 0.0085, "end_step": 145, "status": "done"}, {"y": 1845, "raw_b": 0.0093, "end_step": 151, "status": "done"}, {"y": 1846, "raw_b": 0.0097, "end_step": 158, "status": "done"}, {"y": 1847, "raw_b": 0.0102, "end_step": 165, "status": "done"}, {"y": 1848, "raw_b": 0.0106, "end_step": 172, "status": "done"}, {"y": 1849, "raw_b": 0.0101, "end_step": 179, "status": "done"}, {"y": 1850, "raw_b": 0.0102, "end_step": 186, "status": "done"}, {"y": 1851, "raw_b": 0.0112, "end_step": 194, "status": "done"}, {"y": 1852, "raw_b": 0.0109, "end_step": 201, "status": "done"}, {"y": 1853, "raw_b": 0.0123, "end_step": 209, "status": "done"}, {"y": 1854, "raw_b": 0.0126, "end_step": 218, "status": "done"}, {"y": 1855, "raw_b": 0.0124, "end_step": 226, "status": "done"}, {"y": 1856, "raw_b": 0.0124, "end_step": 234, "status": "done"}, {"y": 1857, "raw_b": 0.0134, "end_step": 243, "status": "done"}, {"y": 1858, "raw_b": 0.0129, "end_step": 252, "status": "done"}, {"y": 1859, "raw_b": 0.0134, "end_step": 261, "status": "done"}, {"y": 1860, "raw_b": 0.0145, "end_step": 271, "status": "done"}, {"y": 1861, "raw_b": 0.0105, "end_step": 278, "status": "done"}, {"y": 1862, "raw_b": 0.0096, "end_step": 285, "status": "done"}, {"y": 1863, "raw_b": 0.01, "end_step": 292, "status": "done"}, {"y": 1864, "raw_b": 0.0104, "end_step": 299, "status": "done"}, {"y": 1865, "raw_b": 0.0092, "end_step": 305, "status": "done"}, {"y": 1866, "raw_b": 0.0121, "end_step": 313, "status": "done"}, {"y": 1867, "raw_b": 0.0144, "end_step": 323, "status": "done"}, {"y": 1868, "raw_b": 0.0136, "end_step": 332, "status": "done"}, {"y": 1869, "raw_b": 0.0146, "end_step": 342, "status": "done"}, {"y": 1870, "raw_b": 0.0156, "end_step": 352, "status": "done"}, {"y": 1871, "raw_b": 0.018, "end_step": 364, "status": "done"}, {"y": 1872, "raw_b": 0.0175, "end_step": 376, "status": "done"}, {"y": 1873, "raw_b": 0.0177, "end_step": 388, "status": "done"}, {"y": 1874, "raw_b": 0.0186, "end_step": 400, "status": "done"}, {"y": 1875, "raw_b": 0.0182, "end_step": 412, "status": "done"}, {"y": 1876, "raw_b": 0.0185, "end_step": 424, "status": "done"}, {"y": 1877, "raw_b": 0.0198, "end_step": 437, "status": "done"}, {"y": 1878, "raw_b": 0.0225, "end_step": 452, "status": "done"}, {"y": 1879, "raw_b": 0.0212, "end_step": 466, "status": "done"}, {"y": 1880, "raw_b": 0.0219, "end_step": 480, "status": "done"}, {"y": 1881, "raw_b": 0.0261, "end_step": 497, "status": "done"}, {"y": 1882, "raw_b": 0.027, "end_step": 515, "status": "done"}, {"y": 1883, "raw_b": 0.0258, "end_step": 532, "status": "done"}, {"y": 1884, "raw_b": 0.0278, "end_step": 550, "status": "done"}, {"y": 1885, "raw_b": 0.0261, "end_step": 567, "status": "done"}, {"y": 1886, "raw_b": 0.0287, "end_step": 586, "status": "done"}, {"y": 1887, "raw_b": 0.0322, "end_step": 607, "status": "done"}, {"y": 1888, "raw_b": 0.0352, "end_step": 630, "status": "done"}, {"y": 1889, "raw_b": 0.0369, "end_step": 654, "status": "done"}, {"y": 1890, "raw_b": 0.0372, "end_step": 678, "status": "done"}, {"y": 1891, "raw_b": 0.0373, "end_step": 702, "status": "done"}, {"y": 1892, "raw_b": 0.0369, "end_step": 726, "status": "done"}, {"y": 1893, "raw_b": 0.0454, "end_step": 755, "status": "done"}, {"y": 1894, "raw_b": 0.042, "end_step": 782, "status": "done"}, {"y": 1895, "raw_b": 0.0454, "end_step": 811, "status": "done"}, {"y": 1896, "raw_b": 0.0445, "end_step": 840, "status": "done"}, {"y": 1897, "raw_b": 0.0429, "end_step": 868, "status": "done"}, {"y": 1898, "raw_b": 0.0461, "end_step": 898, "status": "done"}, {"y": 1899, "raw_b": 0.0462, "end_step": 928, "status": "done"}, {"y": 1900, "raw_b": 0.0449, "end_step": 957, "status": "done"}, {"y": 1901, "raw_b": 0.0442, "end_step": 986, "status": "done"}, {"y": 1902, "raw_b": 0.0476, "end_step": 1017, "status": "done"}, {"y": 1903, "raw_b": 0.0471, "end_step": 1047, "status": "done"}, {"y": 1904, "raw_b": 0.0479, "end_step": 1078, "status": "done"}, {"y": 1905, "raw_b": 0.0482, "end_step": 1109, "status": "done"}, {"y": 1906, "raw_b": 0.0505, "end_step": 1142, "status": "done"}, {"y": 1907, "raw_b": 0.0529, "end_step": 1176, "status": "done"}, {"y": 1908, "raw_b": 0.057, "end_step": 1213, "status": "done"}, {"y": 1909, "raw_b": 0.0602, "end_step": 1252, "status": "done"}, {"y": 1910, "raw_b": 0.0563, "end_step": 1288, "status": "done"}, {"y": 1911, "raw_b": 0.0677, "end_step": 1332, "status": "done"}, {"y": 1912, "raw_b": 0.0669, "end_step": 1375, "status": "done"}, {"y": 1913, "raw_b": 0.068, "end_step": 1419, "status": "done"}, {"y": 1914, "raw_b": 0.0636, "end_step": 1460, "status": "done"}, {"y": 1915, "raw_b": 0.0628, "end_step": 1500, "status": "done"}, {"y": 1916, "raw_b": 0.0624, "end_step": 1540, "status": "done"}, {"y": 1917, "raw_b": 0.0559, "end_step": 1576, "status": "done"}, {"y": 1918, "raw_b": 0.0516, "end_step": 1609, "status": "done"}, {"y": 1919, "raw_b": 0.0552, "end_step": 1645, "status": "done"}, {"y": 1920, "raw_b": 0.0543, "end_step": 1680, "status": "done"}, {"y": 1921, "raw_b": 0.051, "end_step": 1713, "status": "done"}, {"y": 1922, "raw_b": 0.0585, "end_step": 1751, "status": "done"}, {"y": 1923, "raw_b": 0.0579, "end_step": 1788, "status": "done"}, {"y": 1924, "raw_b": 0.0601, "end_step": 1827, "status": "done"}, {"y": 1925, "raw_b": 0.0649, "end_step": 1869, "status": "done"}, {"y": 1926, "raw_b": 0.064, "end_step": 1910, "status": "done"}, {"y": 1927, "raw_b": 0.0673, "end_step": 1953, "status": "done"}, {"y": 1928, "raw_b": 0.065, "end_step": 1995, "status": "done"}, {"y": 1929, "raw_b": 0.0621, "end_step": 2035, "status": "done"}, {"y": 1930, "raw_b": 0.0697, "end_step": 2080, "status": "done"}, {"y": 1931, "raw_b": 0.0733, "end_step": 2127, "status": "done"}, {"y": 1932, "raw_b": 0.073, "end_step": 2174, "status": "done"}, {"y": 1933, "raw_b": 0.0706, "end_step": 2219, "status": "done"}, {"y": 1934, "raw_b": 0.0724, "end_step": 2265, "status": "done"}, {"y": 1935, "raw_b": 0.0724, "end_step": 2312, "status": "done"}, {"y": 1936, "raw_b": 0.0714, "end_step": 2358, "status": "done"}, {"y": 1937, "raw_b": 0.0729, "end_step": 2405, "status": "done"}, {"y": 1938, "raw_b": 0.0734, "end_step": 2452, "status": "done"}, {"y": 1939, "raw_b": 0.0746, "end_step": 2500, "status": "done"}, {"y": 1940, "raw_b": 0.0682, "end_step": 2544, "status": "done"}, {"y": 1941, "raw_b": 0.0665, "end_step": 2587, "status": "done"}, {"y": 1942, "raw_b": 0.0647, "end_step": 2629, "status": "done"}, {"y": 1943, "raw_b": 0.0631, "end_step": 2670, "status": "done"}, {"y": 1944, "raw_b": 0.0617, "end_step": 2710, "status": "done"}, {"y": 1945, "raw_b": 0.0588, "end_step": 2748, "status": "done"}, {"y": 1946, "raw_b": 0.0793, "end_step": 2799, "status": "done"}, {"y": 1947, "raw_b": 1.0459, "end_step": 3464, "status": "done"}, {"y": 1948, "raw_b": 1.0887, "end_step": 4156, "status": "done"}, {"y": 1949, "raw_b": 1.1886, "end_step": 4911, "status": "done"}, {"y": 1950, "raw_b": 1.1121, "end_step": 5618, "status": "done"}, {"y": 1951, "raw_b": 1.3059, "end_step": 6448, "status": "done"}, {"y": 1952, "raw_b": 1.3177, "end_step": 7285, "status": "done"}, {"y": 1953, "raw_b": 1.3753, "end_step": 8159, "status": "done"}, {"y": 1954, "raw_b": 1.4277, "end_step": 9066, "status": "done"}, {"y": 1955, "raw_b": 1.3684, "end_step": 9935, "status": "done"}, {"y": 1956, "raw_b": 1.416, "end_step": 10835, "status": "done"}, {"y": 1957, "raw_b": 1.437, "end_step": 11748, "status": "done"}, {"y": 1958, "raw_b": 1.5354, "end_step": 12723, "status": "done"}, {"y": 1959, "raw_b": 1.6074, "end_step": 13744, "status": "done"}, {"y": 1960, "raw_b": 1.7176, "end_step": 14835, "status": "done"}, {"y": 1961, "raw_b": 1.7598, "end_step": 15953, "status": "done"}, {"y": 1962, "raw_b": 0.9651, "end_step": 16566, "status": "done"}, {"y": 1963, "raw_b": 1.0807, "end_step": 17253, "status": "done"}, {"y": 1964, "raw_b": 1.2411, "end_step": 18042, "status": "done"}, {"y": 1965, "raw_b": 1.5006, "end_step": 18995, "status": "done"}, {"y": 1966, "raw_b": 1.4487, "end_step": 19915, "status": "done"}, {"y": 1967, "raw_b": 1.4812, "end_step": 20856, "status": "done"}, {"y": 1968, "raw_b": 1.5366, "end_step": 21832, "status": "done"}, {"y": 1969, "raw_b": 1.6405, "end_step": 22875, "status": "active"}, {"y": 1970, "raw_b": 1.6828, "end_step": 23944, "status": "todo"}, {"y": 1971, "raw_b": 1.8032, "end_step": 25091, "status": "todo"}, {"y": 1972, "raw_b": 1.8852, "end_step": 26289, "status": "todo"}, {"y": 1973, "raw_b": 1.9243, "end_step": 27512, "status": "todo"}, {"y": 1974, "raw_b": 1.9945, "end_step": 28780, "status": "todo"}, {"y": 1975, "raw_b": 2.0976, "end_step": 30113, "status": "todo"}, {"y": 1976, "raw_b": 2.2613, "end_step": 31550, "status": "todo"}, {"y": 1977, "raw_b": 2.4196, "end_step": 33088, "status": "todo"}, {"y": 1978, "raw_b": 2.3802, "end_step": 34601, "status": "todo"}, {"y": 1979, "raw_b": 2.4593, "end_step": 36165, "status": "todo"}, {"y": 1980, "raw_b": 2.6355, "end_step": 37840, "status": "todo"}, {"y": 1981, "raw_b": 2.8331, "end_step": 39641, "status": "todo"}, {"y": 1982, "raw_b": 2.8193, "end_step": 41433, "status": "todo"}, {"y": 1983, "raw_b": 2.9321, "end_step": 43296, "status": "todo"}, {"y": 1984, "raw_b": 3.0352, "end_step": 45226, "status": "todo"}, {"y": 1985, "raw_b": 3.196, "end_step": 47257, "status": "todo"}, {"y": 1986, "raw_b": 3.3487, "end_step": 49386, "status": "todo"}, {"y": 1987, "raw_b": 3.6275, "end_step": 51691, "status": "todo"}, {"y": 1988, "raw_b": 3.9352, "end_step": 54193, "status": "todo"}, {"y": 1989, "raw_b": 4.1386, "end_step": 56823, "status": "todo"}, {"y": 1990, "raw_b": 4.1959, "end_step": 59490, "status": "todo"}, {"y": 1991, "raw_b": 4.4276, "end_step": 62305, "status": "todo"}, {"y": 1992, "raw_b": 5.0049, "end_step": 65486, "status": "todo"}, {"y": 1993, "raw_b": 5.5691, "end_step": 69026, "status": "todo"}, {"y": 1994, "raw_b": 6.5411, "end_step": 73183, "status": "todo"}, {"y": 1995, "raw_b": 7.3331, "end_step": 77845, "status": "todo"}, {"y": 1996, "raw_b": 9.3508, "end_step": 83788, "status": "todo"}, {"y": 1997, "raw_b": 10.418, "end_step": 90410, "status": "todo"}, {"y": 1998, "raw_b": 12.2416, "end_step": 98191, "status": "todo"}, {"y": 1999, "raw_b": 13.4536, "end_step": 106743, "status": "todo"}, {"y": 2000, "raw_b": 13.6693, "end_step": 115431, "status": "todo"}], "loss_b300": [{"step": 140, "loss": 2.8287, "grad_norm": 0.319, "tok_s": 93755.0, "phase": "b300"}, {"step": 1340, "loss": 1.9189, "grad_norm": 0.167, "tok_s": 283389.0, "phase": "b300"}, {"step": 1886, "loss": 1.8869, "grad_norm": 0.1058, "tok_s": 283341.0, "phase": "b300"}, {"step": 2006, "loss": 1.8587, "grad_norm": 0.1334, "tok_s": 283402.0, "phase": "b300"}, {"step": 2126, "loss": 1.8566, "grad_norm": 0.1123, "tok_s": 332747.0, "phase": "b300"}, {"step": 2246, "loss": 1.8478, "grad_norm": 0.1157, "tok_s": 332732.0, "phase": "b300"}, {"step": 2366, "loss": 1.8793, "grad_norm": 0.1112, "tok_s": 330255.0, "phase": "b300"}, {"step": 2486, "loss": 1.8484, "grad_norm": 0.1075, "tok_s": 333108.0, "phase": "b300"}, {"step": 2606, "loss": 1.8622, "grad_norm": 0.0929, "tok_s": 332740.0, "phase": "b300"}, {"step": 2726, "loss": 1.9505, "grad_norm": 0.1007, "tok_s": 333157.0, "phase": "b300"}, {"step": 2846, "loss": 2.729, "grad_norm": 0.1428, "tok_s": 332683.0, "phase": "b300"}, {"step": 2966, "loss": 2.5759, "grad_norm": 0.1208, "tok_s": 332642.0, "phase": "b300"}, {"step": 3086, "loss": 2.5162, "grad_norm": 0.1426, "tok_s": 333112.0, "phase": "b300"}, {"step": 3206, "loss": 2.477, "grad_norm": 0.1137, "tok_s": 332029.0, "phase": "b300"}, {"step": 3326, "loss": 2.4591, "grad_norm": 0.1045, "tok_s": 332902.0, "phase": "b300"}, {"step": 3446, "loss": 2.4368, "grad_norm": 0.1058, "tok_s": 332368.0, "phase": "b300"}, {"step": 3566, "loss": 2.4887, "grad_norm": 0.1879, "tok_s": 332702.0, "phase": "b300"}, {"step": 3686, "loss": 2.4539, "grad_norm": 0.0964, "tok_s": 332756.0, "phase": "b300"}, {"step": 3806, "loss": 2.4356, "grad_norm": 0.1384, "tok_s": 332506.0, "phase": "b300"}, {"step": 3926, "loss": 2.4116, "grad_norm": 0.1128, "tok_s": 332647.0, "phase": "b300"}, {"step": 4046, "loss": 2.3919, "grad_norm": 0.1375, "tok_s": 332502.0, "phase": "b300"}, {"step": 4166, "loss": 2.4663, "grad_norm": 0.103, "tok_s": 332727.0, "phase": "b300"}, {"step": 4286, "loss": 2.4242, "grad_norm": 0.0946, "tok_s": 332843.0, "phase": "b300"}, {"step": 4406, "loss": 2.4105, "grad_norm": 0.1164, "tok_s": 320663.0, "phase": "b300"}, {"step": 4526, "loss": 2.3842, "grad_norm": 0.1101, "tok_s": 332033.0, "phase": "b300"}, {"step": 4646, "loss": 2.3734, "grad_norm": 0.1063, "tok_s": 331263.0, "phase": "b300"}, {"step": 4766, "loss": 2.3699, "grad_norm": 0.1255, "tok_s": 331535.0, "phase": "b300"}, {"step": 4792, "loss": 2.3654, "grad_norm": 0.1038, "tok_s": 330105.0, "phase": "b300"}, {"step": 4912, "loss": 2.4251, "grad_norm": 0.1411, "tok_s": 333594.0, "phase": "b300"}, {"step": 5032, "loss": 2.4525, "grad_norm": 0.1298, "tok_s": 332761.0, "phase": "b300"}, {"step": 5152, "loss": 2.4171, "grad_norm": 0.0884, "tok_s": 332306.0, "phase": "b300"}, {"step": 5272, "loss": 2.4262, "grad_norm": 0.0964, "tok_s": 315438.0, "phase": "b300"}, {"step": 5392, "loss": 2.4002, "grad_norm": 0.1105, "tok_s": 327778.0, "phase": "b300"}, {"step": 5512, "loss": 2.3939, "grad_norm": 0.1316, "tok_s": 332017.0, "phase": "b300"}, {"step": 5632, "loss": 2.4503, "grad_norm": 0.1135, "tok_s": 332265.0, "phase": "b300"}, {"step": 5752, "loss": 2.4084, "grad_norm": 0.1132, "tok_s": 332169.0, "phase": "b300"}, {"step": 5872, "loss": 2.396, "grad_norm": 0.109, "tok_s": 332658.0, "phase": "b300"}, {"step": 5992, "loss": 2.3818, "grad_norm": 0.1157, "tok_s": 332102.0, "phase": "b300"}, {"step": 6112, "loss": 2.3476, "grad_norm": 0.1417, "tok_s": 331892.0, "phase": "b300"}, {"step": 6232, "loss": 2.3555, "grad_norm": 0.163, "tok_s": 333080.0, "phase": "b300"}, {"step": 6352, "loss": 2.3576, "grad_norm": 0.116, "tok_s": 332126.0, "phase": "b300"}, {"step": 6472, "loss": 2.436, "grad_norm": 0.1174, "tok_s": 328035.0, "phase": "b300"}, {"step": 6592, "loss": 2.4003, "grad_norm": 0.1334, "tok_s": 332579.0, "phase": "b300"}, {"step": 6712, "loss": 2.3849, "grad_norm": 0.106, "tok_s": 332860.0, "phase": "b300"}, {"step": 6832, "loss": 2.3752, "grad_norm": 0.1102, "tok_s": 332843.0, "phase": "b300"}, {"step": 6952, "loss": 2.365, "grad_norm": 0.1128, "tok_s": 332018.0, "phase": "b300"}, {"step": 7072, "loss": 2.3573, "grad_norm": 0.1056, "tok_s": 332743.0, "phase": "b300"}, {"step": 7192, "loss": 2.3466, "grad_norm": 0.1116, "tok_s": 332254.0, "phase": "b300"}, {"step": 7312, "loss": 2.4159, "grad_norm": 0.1544, "tok_s": 332466.0, "phase": "b300"}, {"step": 7432, "loss": 2.3885, "grad_norm": 0.1061, "tok_s": 332046.0, "phase": "b300"}, {"step": 7552, "loss": 2.3816, "grad_norm": 0.1359, "tok_s": 332360.0, "phase": "b300"}, {"step": 7672, "loss": 2.365, "grad_norm": 0.0981, "tok_s": 332331.0, "phase": "b300"}, {"step": 7792, "loss": 2.3511, "grad_norm": 0.1164, "tok_s": 331823.0, "phase": "b300"}, {"step": 7912, "loss": 2.3553, "grad_norm": 0.1045, "tok_s": 331990.0, "phase": "b300"}, {"step": 8032, "loss": 2.3359, "grad_norm": 0.1245, "tok_s": 331534.0, "phase": "b300"}, {"step": 8152, "loss": 2.3447, "grad_norm": 0.1499, "tok_s": 327140.0, "phase": "b300"}, {"step": 8272, "loss": 2.3694, "grad_norm": 0.1475, "tok_s": 332181.0, "phase": "b300"}, {"step": 8392, "loss": 2.3442, "grad_norm": 0.1026, "tok_s": 326602.0, "phase": "b300"}, {"step": 8512, "loss": 2.3536, "grad_norm": 0.1025, "tok_s": 332537.0, "phase": "b300"}, {"step": 8632, "loss": 2.3421, "grad_norm": 0.0911, "tok_s": 331975.0, "phase": "b300"}, {"step": 8752, "loss": 2.3322, "grad_norm": 0.1263, "tok_s": 331932.0, "phase": "b300"}, {"step": 8872, "loss": 2.3492, "grad_norm": 0.1009, "tok_s": 332010.0, "phase": "b300"}, {"step": 8992, "loss": 2.3396, "grad_norm": 0.1158, "tok_s": 331141.0, "phase": "b300"}, {"step": 9112, "loss": 2.4062, "grad_norm": 0.1214, "tok_s": 331232.0, "phase": "b300"}, {"step": 9232, "loss": 2.3875, "grad_norm": 0.1142, "tok_s": 332034.0, "phase": "b300"}, {"step": 9352, "loss": 2.3556, "grad_norm": 0.1374, "tok_s": 331742.0, "phase": "b300"}, {"step": 9472, "loss": 2.3535, "grad_norm": 0.2008, "tok_s": 331842.0, "phase": "b300"}, {"step": 9592, "loss": 2.3537, "grad_norm": 0.1379, "tok_s": 331478.0, "phase": "b300"}, {"step": 9712, "loss": 2.348, "grad_norm": 0.1294, "tok_s": 331769.0, "phase": "b300"}, {"step": 9832, "loss": 2.341, "grad_norm": 0.0942, "tok_s": 331558.0, "phase": "b300"}, {"step": 9952, "loss": 2.4146, "grad_norm": 0.1049, "tok_s": 331721.0, "phase": "b300"}, {"step": 10072, "loss": 2.3855, "grad_norm": 0.1178, "tok_s": 331325.0, "phase": "b300"}, {"step": 10192, "loss": 2.3671, "grad_norm": 0.1043, "tok_s": 331329.0, "phase": "b300"}, {"step": 10312, "loss": 2.3682, "grad_norm": 0.1018, "tok_s": 331801.0, "phase": "b300"}, {"step": 10432, "loss": 2.3464, "grad_norm": 0.1249, "tok_s": 331242.0, "phase": "b300"}, {"step": 10552, "loss": 2.3409, "grad_norm": 0.1291, "tok_s": 331239.0, "phase": "b300"}, {"step": 10672, "loss": 2.3415, "grad_norm": 0.1282, "tok_s": 330999.0, "phase": "b300"}, {"step": 10792, "loss": 2.3342, "grad_norm": 0.0977, "tok_s": 331379.0, "phase": "b300"}, {"step": 10912, "loss": 2.3754, "grad_norm": 0.114, "tok_s": 331102.0, "phase": "b300"}, {"step": 11032, "loss": 2.3634, "grad_norm": 0.1677, "tok_s": 331636.0, "phase": "b300"}, {"step": 11152, "loss": 2.3485, "grad_norm": 0.1209, "tok_s": 331234.0, "phase": "b300"}, {"step": 11272, "loss": 2.3359, "grad_norm": 0.1166, "tok_s": 331182.0, "phase": "b300"}, {"step": 11392, "loss": 2.3492, "grad_norm": 0.1406, "tok_s": 331439.0, "phase": "b300"}, {"step": 11512, "loss": 2.3376, "grad_norm": 0.1248, "tok_s": 331482.0, "phase": "b300"}, {"step": 11632, "loss": 2.32, "grad_norm": 0.1407, "tok_s": 331129.0, "phase": "b300"}, {"step": 11752, "loss": 2.384, "grad_norm": 0.1056, "tok_s": 305425.0, "phase": "b300"}, {"step": 11872, "loss": 2.3703, "grad_norm": 0.1219, "tok_s": 331853.0, "phase": "b300"}, {"step": 11992, "loss": 2.3481, "grad_norm": 0.1176, "tok_s": 323807.0, "phase": "b300"}, {"step": 12112, "loss": 2.3496, "grad_norm": 0.1106, "tok_s": 331594.0, "phase": "b300"}, {"step": 12232, "loss": 2.3407, "grad_norm": 0.1195, "tok_s": 327696.0, "phase": "b300"}, {"step": 12352, "loss": 2.3277, "grad_norm": 0.1074, "tok_s": 331584.0, "phase": "b300"}, {"step": 12472, "loss": 2.3202, "grad_norm": 0.1232, "tok_s": 331867.0, "phase": "b300"}, {"step": 12592, "loss": 2.3303, "grad_norm": 0.1073, "tok_s": 331646.0, "phase": "b300"}, {"step": 12712, "loss": 2.3183, "grad_norm": 0.1069, "tok_s": 331262.0, "phase": "b300"}, {"step": 12832, "loss": 2.3579, "grad_norm": 0.1048, "tok_s": 331581.0, "phase": "b300"}, {"step": 12952, "loss": 2.3428, "grad_norm": 0.1407, "tok_s": 331342.0, "phase": "b300"}, {"step": 13072, "loss": 2.3375, "grad_norm": 0.1112, "tok_s": 331107.0, "phase": "b300"}, {"step": 13192, "loss": 2.3291, "grad_norm": 0.1363, "tok_s": 331697.0, "phase": "b300"}, {"step": 13312, "loss": 2.3281, "grad_norm": 0.0915, "tok_s": 331060.0, "phase": "b300"}, {"step": 13432, "loss": 2.3119, "grad_norm": 0.1072, "tok_s": 331392.0, "phase": "b300"}, {"step": 13552, "loss": 2.3092, "grad_norm": 0.1294, "tok_s": 331307.0, "phase": "b300"}, {"step": 13672, "loss": 2.3099, "grad_norm": 0.1122, "tok_s": 331247.0, "phase": "b300"}, {"step": 13792, "loss": 2.3753, "grad_norm": 0.0988, "tok_s": 331541.0, "phase": "b300"}, {"step": 13912, "loss": 2.349, "grad_norm": 0.0917, "tok_s": 331301.0, "phase": "b300"}, {"step": 14032, "loss": 2.3386, "grad_norm": 0.0882, "tok_s": 330607.0, "phase": "b300"}, {"step": 14152, "loss": 2.333, "grad_norm": 0.1187, "tok_s": 325355.0, "phase": "b300"}, {"step": 14272, "loss": 2.3259, "grad_norm": 0.1138, "tok_s": 331174.0, "phase": "b300"}, {"step": 14392, "loss": 2.3178, "grad_norm": 0.1327, "tok_s": 331365.0, "phase": "b300"}, {"step": 14512, "loss": 2.3089, "grad_norm": 0.1023, "tok_s": 331434.0, "phase": "b300"}, {"step": 14632, "loss": 2.3074, "grad_norm": 0.1188, "tok_s": 331383.0, "phase": "b300"}, {"step": 14752, "loss": 2.3142, "grad_norm": 0.107, "tok_s": 331261.0, "phase": "b300"}, {"step": 14872, "loss": 2.3683, "grad_norm": 0.1151, "tok_s": 331321.0, "phase": "b300"}, {"step": 14992, "loss": 2.3301, "grad_norm": 0.1128, "tok_s": 331097.0, "phase": "b300"}, {"step": 15112, "loss": 2.3259, "grad_norm": 0.0965, "tok_s": 331230.0, "phase": "b300"}, {"step": 15232, "loss": 2.3135, "grad_norm": 0.1142, "tok_s": 331290.0, "phase": "b300"}, {"step": 15352, "loss": 2.3116, "grad_norm": 0.102, "tok_s": 330815.0, "phase": "b300"}, {"step": 15472, "loss": 2.3021, "grad_norm": 0.1476, "tok_s": 331259.0, "phase": "b300"}, {"step": 15592, "loss": 2.297, "grad_norm": 0.1144, "tok_s": 331194.0, "phase": "b300"}, {"step": 15712, "loss": 2.2979, "grad_norm": 0.1109, "tok_s": 331171.0, "phase": "b300"}, {"step": 15832, "loss": 2.2877, "grad_norm": 0.0946, "tok_s": 331238.0, "phase": "b300"}, {"step": 15952, "loss": 2.2931, "grad_norm": 0.1116, "tok_s": 325129.0, "phase": "b300"}, {"step": 16072, "loss": 2.2515, "grad_norm": 0.1143, "tok_s": 318519.0, "phase": "b300"}, {"step": 16192, "loss": 2.2463, "grad_norm": 0.1098, "tok_s": 326814.0, "phase": "b300"}, {"step": 16312, "loss": 2.2247, "grad_norm": 0.107, "tok_s": 331020.0, "phase": "b300"}, {"step": 16432, "loss": 2.2251, "grad_norm": 0.0865, "tok_s": 331415.0, "phase": "b300"}, {"step": 16552, "loss": 2.2201, "grad_norm": 0.0979, "tok_s": 331060.0, "phase": "b300"}, {"step": 16672, "loss": 2.2443, "grad_norm": 0.1049, "tok_s": 330932.0, "phase": "b300"}, {"step": 16792, "loss": 2.2256, "grad_norm": 0.0893, "tok_s": 331207.0, "phase": "b300"}, {"step": 16912, "loss": 2.2176, "grad_norm": 0.1549, "tok_s": 331386.0, "phase": "b300"}, {"step": 17032, "loss": 2.2086, "grad_norm": 0.1032, "tok_s": 331047.0, "phase": "b300"}, {"step": 17152, "loss": 2.1973, "grad_norm": 0.1076, "tok_s": 317358.0, "phase": "b300"}, {"step": 17272, "loss": 2.2637, "grad_norm": 0.1173, "tok_s": 331419.0, "phase": "b300"}, {"step": 17392, "loss": 2.2439, "grad_norm": 0.1221, "tok_s": 327173.0, "phase": "b300"}, {"step": 17512, "loss": 2.2154, "grad_norm": 0.1339, "tok_s": 331988.0, "phase": "b300"}, {"step": 17632, "loss": 2.2196, "grad_norm": 0.1233, "tok_s": 331919.0, "phase": "b300"}, {"step": 17752, "loss": 2.2159, "grad_norm": 0.131, "tok_s": 331696.0, "phase": "b300"}, {"step": 17872, "loss": 2.2153, "grad_norm": 0.0893, "tok_s": 324662.0, "phase": "b300"}, {"step": 17992, "loss": 2.205, "grad_norm": 0.0921, "tok_s": 331775.0, "phase": "b300"}, {"step": 18112, "loss": 2.2976, "grad_norm": 0.1099, "tok_s": 331369.0, "phase": "b300"}, {"step": 18232, "loss": 2.2454, "grad_norm": 0.1042, "tok_s": 292868.0, "phase": "b300"}, {"step": 18352, "loss": 2.228, "grad_norm": 0.09, "tok_s": 331783.0, "phase": "b300"}, {"step": 18472, "loss": 2.222, "grad_norm": 0.0921, "tok_s": 331507.0, "phase": "b300"}, {"step": 18592, "loss": 2.22, "grad_norm": 0.1256, "tok_s": 331458.0, "phase": "b300"}, {"step": 18712, "loss": 2.2105, "grad_norm": 0.0907, "tok_s": 331655.0, "phase": "b300"}, {"step": 18832, "loss": 2.2092, "grad_norm": 0.1163, "tok_s": 331587.0, "phase": "b300"}, {"step": 18952, "loss": 2.2156, "grad_norm": 0.0988, "tok_s": 331182.0, "phase": "b300"}, {"step": 19072, "loss": 2.2213, "grad_norm": 0.0798, "tok_s": 321010.0, "phase": "b300"}, {"step": 19192, "loss": 2.2205, "grad_norm": 0.1106, "tok_s": 317704.0, "phase": "b300"}, {"step": 19312, "loss": 2.2014, "grad_norm": 0.1046, "tok_s": 331311.0, "phase": "b300"}, {"step": 19432, "loss": 2.1879, "grad_norm": 0.0996, "tok_s": 331854.0, "phase": "b300"}, {"step": 19552, "loss": 2.1821, "grad_norm": 0.1274, "tok_s": 331242.0, "phase": "b300"}, {"step": 19672, "loss": 2.195, "grad_norm": 0.0963, "tok_s": 331768.0, "phase": "b300"}, {"step": 19792, "loss": 2.2012, "grad_norm": 0.0957, "tok_s": 331488.0, "phase": "b300"}, {"step": 19912, "loss": 2.1868, "grad_norm": 0.0766, "tok_s": 331473.0, "phase": "b300"}, {"step": 20032, "loss": 2.2184, "grad_norm": 0.0922, "tok_s": 331787.0, "phase": "b300"}, {"step": 20152, "loss": 2.2214, "grad_norm": 0.0923, "tok_s": 331668.0, "phase": "b300"}, {"step": 20272, "loss": 2.2119, "grad_norm": 0.0807, "tok_s": 331686.0, "phase": "b300"}, {"step": 20392, "loss": 2.2179, "grad_norm": 0.0867, "tok_s": 331519.0, "phase": "b300"}, {"step": 20512, "loss": 2.2054, "grad_norm": 0.1325, "tok_s": 331491.0, "phase": "b300"}, {"step": 20632, "loss": 2.2108, "grad_norm": 0.112, "tok_s": 331435.0, "phase": "b300"}, {"step": 20752, "loss": 2.206, "grad_norm": 0.1234, "tok_s": 331227.0, "phase": "b300"}, {"step": 20872, "loss": 2.2385, "grad_norm": 0.0943, "tok_s": 331459.0, "phase": "b300"}, {"step": 20992, "loss": 2.2199, "grad_norm": 0.093, "tok_s": 331277.0, "phase": "b300"}, {"step": 21112, "loss": 2.1995, "grad_norm": 0.0862, "tok_s": 325868.0, "phase": "b300"}, {"step": 21232, "loss": 2.1954, "grad_norm": 0.0937, "tok_s": 314644.0, "phase": "b300"}, {"step": 21352, "loss": 2.2001, "grad_norm": 0.0952, "tok_s": 331423.0, "phase": "b300"}, {"step": 21472, "loss": 2.1948, "grad_norm": 0.0995, "tok_s": 331759.0, "phase": "b300"}, {"step": 21592, "loss": 2.1917, "grad_norm": 0.1015, "tok_s": 331651.0, "phase": "b300"}, {"step": 21652, "loss": 2.2139, "grad_norm": 0.103, "tok_s": 326671.0, "phase": "b300"}, {"step": 21656, "loss": 2.2072, "grad_norm": 0.1095, "tok_s": 331954.0, "phase": "b300"}, {"step": 21660, "loss": 2.2111, "grad_norm": 0.0996, "tok_s": 331726.0, "phase": "b300"}, {"step": 21664, "loss": 2.2024, "grad_norm": 0.1182, "tok_s": 331544.0, "phase": "b300"}, {"step": 21668, "loss": 2.1957, "grad_norm": 0.1169, "tok_s": 331702.0, "phase": "b300"}, {"step": 21672, "loss": 2.2031, "grad_norm": 0.1068, "tok_s": 331232.0, "phase": "b300"}, {"step": 21676, "loss": 2.164, "grad_norm": 0.0837, "tok_s": 331167.0, "phase": "b300"}, {"step": 21680, "loss": 2.1767, "grad_norm": 0.0713, "tok_s": 331491.0, "phase": "b300"}, {"step": 21684, "loss": 2.2109, "grad_norm": 0.1029, "tok_s": 331761.0, "phase": "b300"}, {"step": 21688, "loss": 2.1773, "grad_norm": 0.0961, "tok_s": 183969.0, "phase": "b300"}, {"step": 21692, "loss": 2.177, "grad_norm": 0.0775, "tok_s": 331828.0, "phase": "b300"}, {"step": 21696, "loss": 2.1956, "grad_norm": 0.0943, "tok_s": 331721.0, "phase": "b300"}, {"step": 21700, "loss": 2.2015, "grad_norm": 0.0867, "tok_s": 331903.0, "phase": "b300"}, {"step": 21704, "loss": 2.2239, "grad_norm": 0.1152, "tok_s": 331882.0, "phase": "b300"}, {"step": 21708, "loss": 2.157, "grad_norm": 0.1317, "tok_s": 331247.0, "phase": "b300"}, {"step": 21712, "loss": 2.1796, "grad_norm": 0.1168, "tok_s": 331690.0, "phase": "b300"}, {"step": 21716, "loss": 2.2054, "grad_norm": 0.0942, "tok_s": 331172.0, "phase": "b300"}, {"step": 21720, "loss": 2.1576, "grad_norm": 0.0753, "tok_s": 316243.0, "phase": "b300"}, {"step": 21724, "loss": 2.1712, "grad_norm": 0.0888, "tok_s": 331256.0, "phase": "b300"}, {"step": 21728, "loss": 2.2075, "grad_norm": 0.098, "tok_s": 331411.0, "phase": "b300"}, {"step": 21732, "loss": 2.1631, "grad_norm": 0.0707, "tok_s": 331381.0, "phase": "b300"}, {"step": 21736, "loss": 2.2256, "grad_norm": 0.0862, "tok_s": 331471.0, "phase": "b300"}, {"step": 21740, "loss": 2.197, "grad_norm": 0.0734, "tok_s": 331740.0, "phase": "b300"}, {"step": 21744, "loss": 2.1715, "grad_norm": 0.0708, "tok_s": 331810.0, "phase": "b300"}, {"step": 21748, "loss": 2.2222, "grad_norm": 0.0829, "tok_s": 331750.0, "phase": "b300"}, {"step": 21752, "loss": 2.1947, "grad_norm": 0.0845, "tok_s": 331299.0, "phase": "b300"}, {"step": 21756, "loss": 2.1989, "grad_norm": 0.0912, "tok_s": 331841.0, "phase": "b300"}, {"step": 21760, "loss": 2.1915, "grad_norm": 0.1574, "tok_s": 331240.0, "phase": "b300"}, {"step": 21764, "loss": 2.2282, "grad_norm": 0.1059, "tok_s": 331744.0, "phase": "b300"}, {"step": 21768, "loss": 2.2206, "grad_norm": 0.1064, "tok_s": 324129.0, "phase": "b300"}, {"step": 21772, "loss": 2.1494, "grad_norm": 0.0715, "tok_s": 331571.0, "phase": "b300"}, {"step": 21776, "loss": 2.2335, "grad_norm": 0.0992, "tok_s": 331448.0, "phase": "b300"}, {"step": 21780, "loss": 2.2237, "grad_norm": 0.0976, "tok_s": 331284.0, "phase": "b300"}, {"step": 21784, "loss": 2.1809, "grad_norm": 0.0893, "tok_s": 331748.0, "phase": "b300"}, {"step": 21788, "loss": 2.176, "grad_norm": 0.1089, "tok_s": 323512.0, "phase": "b300"}, {"step": 21792, "loss": 2.1843, "grad_norm": 0.0932, "tok_s": 331800.0, "phase": "b300"}, {"step": 21796, "loss": 2.1962, "grad_norm": 0.0974, "tok_s": 331750.0, "phase": "b300"}, {"step": 21800, "loss": 2.1701, "grad_norm": 0.0894, "tok_s": 331072.0, "phase": "b300"}, {"step": 21801, "loss": 2.1912, "grad_norm": 0.0942, "tok_s": 331507.0, "phase": "b300"}, {"step": 21802, "loss": 2.2111, "grad_norm": 0.1011, "tok_s": 331564.0, "phase": "b300"}, {"step": 21803, "loss": 2.1965, "grad_norm": 0.1008, "tok_s": 331752.0, "phase": "b300"}, {"step": 21804, "loss": 2.1784, "grad_norm": 0.1069, "tok_s": 331513.0, "phase": "b300"}, {"step": 21805, "loss": 2.2165, "grad_norm": 0.1104, "tok_s": 331904.0, "phase": "b300"}, {"step": 21806, "loss": 2.2036, "grad_norm": 0.1164, "tok_s": 331300.0, "phase": "b300"}, {"step": 21807, "loss": 2.1972, "grad_norm": 0.106, "tok_s": 331590.0, "phase": "b300"}, {"step": 21808, "loss": 2.1778, "grad_norm": 0.1076, "tok_s": 331408.0, "phase": "b300"}, {"step": 21809, "loss": 2.1898, "grad_norm": 0.109, "tok_s": 331631.0, "phase": "b300"}, {"step": 21810, "loss": 2.1576, "grad_norm": 0.1141, "tok_s": 331527.0, "phase": "b300"}, {"step": 21811, "loss": 2.2226, "grad_norm": 0.1083, "tok_s": 331668.0, "phase": "b300"}, {"step": 21812, "loss": 2.1768, "grad_norm": 0.1127, "tok_s": 331804.0, "phase": "b300"}, {"step": 21813, "loss": 2.163, "grad_norm": 0.1145, "tok_s": 331586.0, "phase": "b300"}], "loss_tpu_s1": [{"step": 21814, "loss": 2.2069, "grad_norm": 0.126, "tok_s": 9111.0, "phase": "tpu_s1"}, {"step": 21815, "loss": 2.2118, "grad_norm": 0.1151, "tok_s": 10280.0, "phase": "tpu_s1"}, {"step": 21816, "loss": 2.218, "grad_norm": 0.1073, "tok_s": 10309.0, "phase": "tpu_s1"}, {"step": 21817, "loss": 2.1727, "grad_norm": 0.1014, "tok_s": 10287.0, "phase": "tpu_s1"}, {"step": 21818, "loss": 2.1707, "grad_norm": 0.0973, "tok_s": 10330.0, "phase": "tpu_s1"}, {"step": 21822, "loss": 2.1672, "grad_norm": 0.0893, "tok_s": 10319.0, "phase": "tpu_s1"}, {"step": 21826, "loss": 2.1873, "grad_norm": 0.0903, "tok_s": 10352.0, "phase": "tpu_s1"}, {"step": 21830, "loss": 2.1751, "grad_norm": 0.0827, "tok_s": 10352.0, "phase": "tpu_s1"}, {"step": 21834, "loss": 2.2242, "grad_norm": 0.0728, "tok_s": 10275.0, "phase": "tpu_s1"}, {"step": 21838, "loss": 2.2707, "grad_norm": 0.0744, "tok_s": 10252.0, "phase": "tpu_s1"}, {"step": 21842, "loss": 2.2239, "grad_norm": 0.0902, "tok_s": 10098.0, "phase": "tpu_s1"}, {"step": 21846, "loss": 2.2101, "grad_norm": 0.1339, "tok_s": 10285.0, "phase": "tpu_s1"}, {"step": 21850, "loss": 2.2462, "grad_norm": 0.1414, "tok_s": 10295.0, "phase": "tpu_s1"}, {"step": 21854, "loss": 2.2087, "grad_norm": 0.1159, "tok_s": 10251.0, "phase": "tpu_s1"}, {"step": 21858, "loss": 2.2541, "grad_norm": 0.1008, "tok_s": 10267.0, "phase": "tpu_s1"}, {"step": 21862, "loss": 2.2112, "grad_norm": 0.102, "tok_s": 10261.0, "phase": "tpu_s1"}, {"step": 21866, "loss": 2.2078, "grad_norm": 0.1056, "tok_s": 6096.0, "phase": "tpu_s1"}, {"step": 21870, "loss": 2.258, "grad_norm": 0.0982, "tok_s": 10264.0, "phase": "tpu_s1"}, {"step": 21874, "loss": 2.2087, "grad_norm": 0.0749, "tok_s": 10296.0, "phase": "tpu_s1"}, {"step": 21878, "loss": 2.2614, "grad_norm": 0.0782, "tok_s": 10281.0, "phase": "tpu_s1"}, {"step": 21882, "loss": 2.2003, "grad_norm": 0.083, "tok_s": 10290.0, "phase": "tpu_s1"}, {"step": 21886, "loss": 2.2149, "grad_norm": 0.088, "tok_s": 10313.0, "phase": "tpu_s1"}, {"step": 21890, "loss": 2.2214, "grad_norm": 0.0834, "tok_s": 10288.0, "phase": "tpu_s1"}, {"step": 21894, "loss": 2.2424, "grad_norm": 0.0872, "tok_s": 10114.0, "phase": "tpu_s1"}, {"step": 21898, "loss": 2.2187, "grad_norm": 0.1101, "tok_s": 10252.0, "phase": "tpu_s1"}, {"step": 21902, "loss": 2.2124, "grad_norm": 0.1177, "tok_s": 10268.0, "phase": "tpu_s1"}, {"step": 21906, "loss": 2.2379, "grad_norm": 0.1408, "tok_s": 10276.0, "phase": "tpu_s1"}, {"step": 21910, "loss": 2.1912, "grad_norm": 0.1165, "tok_s": 10286.0, "phase": "tpu_s1"}, {"step": 21914, "loss": 2.1684, "grad_norm": 0.0974, "tok_s": 10300.0, "phase": "tpu_s1"}, {"step": 21918, "loss": 2.2229, "grad_norm": 0.1072, "tok_s": 6086.0, "phase": "tpu_s1"}, {"step": 21922, "loss": 2.2086, "grad_norm": 0.0917, "tok_s": 10226.0, "phase": "tpu_s1"}, {"step": 21926, "loss": 2.1859, "grad_norm": 0.0901, "tok_s": 10271.0, "phase": "tpu_s1"}, {"step": 21930, "loss": 2.1931, "grad_norm": 0.0994, "tok_s": 10312.0, "phase": "tpu_s1"}, {"step": 21934, "loss": 2.2017, "grad_norm": 0.098, "tok_s": 10313.0, "phase": "tpu_s1"}, {"step": 21938, "loss": 2.2667, "grad_norm": 0.0953, "tok_s": 10288.0, "phase": "tpu_s1"}, {"step": 21944, "loss": 2.2207, "grad_norm": 0.0859, "tok_s": 6097.0, "phase": "tpu_s1"}, {"step": 21948, "loss": 2.2177, "grad_norm": 0.0803, "tok_s": 10270.0, "phase": "tpu_s1"}, {"step": 21952, "loss": 2.2047, "grad_norm": 0.0882, "tok_s": 10302.0, "phase": "tpu_s1"}, {"step": 21956, "loss": 2.2125, "grad_norm": 0.0877, "tok_s": 10301.0, "phase": "tpu_s1"}, {"step": 21960, "loss": 2.2109, "grad_norm": 0.1022, "tok_s": 10309.0, "phase": "tpu_s1"}, {"step": 21964, "loss": 2.1998, "grad_norm": 0.104, "tok_s": 10298.0, "phase": "tpu_s1"}, {"step": 21968, "loss": 2.2301, "grad_norm": 0.0786, "tok_s": 10335.0, "phase": "tpu_s1"}, {"step": 21972, "loss": 2.2349, "grad_norm": 0.0768, "tok_s": 10122.0, "phase": "tpu_s1"}, {"step": 21976, "loss": 2.2089, "grad_norm": 0.108, "tok_s": 10286.0, "phase": "tpu_s1"}, {"step": 21980, "loss": 2.1761, "grad_norm": 0.1304, "tok_s": 10272.0, "phase": "tpu_s1"}, {"step": 21984, "loss": 2.1846, "grad_norm": 0.0934, "tok_s": 10271.0, "phase": "tpu_s1"}, {"step": 21988, "loss": 2.1522, "grad_norm": 0.0973, "tok_s": 10290.0, "phase": "tpu_s1"}, {"step": 21992, "loss": 2.1925, "grad_norm": 0.0924, "tok_s": 10266.0, "phase": "tpu_s1"}, {"step": 21996, "loss": 2.1607, "grad_norm": 0.0853, "tok_s": 6032.0, "phase": "tpu_s1"}, {"step": 22001, "loss": 2.2061, "grad_norm": 0.0858, "tok_s": 10099.0, "phase": "tpu_s1"}, {"step": 22005, "loss": 2.1896, "grad_norm": 0.0913, "tok_s": 10270.0, "phase": "tpu_s1"}, {"step": 22009, "loss": 2.1997, "grad_norm": 0.1312, "tok_s": 10278.0, "phase": "tpu_s1"}, {"step": 22014, "loss": 2.197, "grad_norm": 0.1211, "tok_s": 10279.0, "phase": "tpu_s1"}, {"step": 22018, "loss": 2.1719, "grad_norm": 0.1015, "tok_s": 10320.0, "phase": "tpu_s1"}, {"step": 22022, "loss": 2.2091, "grad_norm": 0.0838, "tok_s": 10307.0, "phase": "tpu_s1"}, {"step": 22026, "loss": 2.1995, "grad_norm": 0.0897, "tok_s": 6096.0, "phase": "tpu_s1"}, {"step": 22030, "loss": 2.2018, "grad_norm": 0.1099, "tok_s": 10263.0, "phase": "tpu_s1"}, {"step": 22035, "loss": 2.1966, "grad_norm": 0.1003, "tok_s": 10274.0, "phase": "tpu_s1"}, {"step": 22039, "loss": 2.2236, "grad_norm": 0.0895, "tok_s": 10246.0, "phase": "tpu_s1"}, {"step": 22043, "loss": 2.171, "grad_norm": 0.0878, "tok_s": 10315.0, "phase": "tpu_s1"}, {"step": 22047, "loss": 2.1671, "grad_norm": 0.078, "tok_s": 10329.0, "phase": "tpu_s1"}, {"step": 22051, "loss": 2.2006, "grad_norm": 0.0882, "tok_s": 10296.0, "phase": "tpu_s1"}, {"step": 22055, "loss": 2.2375, "grad_norm": 0.0841, "tok_s": 10205.0, "phase": "tpu_s1"}, {"step": 22059, "loss": 2.1823, "grad_norm": 0.1077, "tok_s": 10309.0, "phase": "tpu_s1"}, {"step": 22063, "loss": 2.1947, "grad_norm": 0.1162, "tok_s": 10329.0, "phase": "tpu_s1"}, {"step": 22068, "loss": 2.1656, "grad_norm": 0.0902, "tok_s": 10318.0, "phase": "tpu_s1"}, {"step": 22073, "loss": 2.2197, "grad_norm": 0.0997, "tok_s": 10312.0, "phase": "tpu_s1"}, {"step": 22077, "loss": 2.2005, "grad_norm": 0.0831, "tok_s": 10314.0, "phase": "tpu_s1"}, {"step": 22081, "loss": 2.2324, "grad_norm": 0.0874, "tok_s": 10183.0, "phase": "tpu_s1"}, {"step": 22085, "loss": 2.1918, "grad_norm": 0.0925, "tok_s": 10307.0, "phase": "tpu_s1"}, {"step": 22089, "loss": 2.1974, "grad_norm": 0.0885, "tok_s": 10318.0, "phase": "tpu_s1"}, {"step": 22093, "loss": 2.1689, "grad_norm": 0.09, "tok_s": 10306.0, "phase": "tpu_s1"}, {"step": 22097, "loss": 2.1828, "grad_norm": 0.0992, "tok_s": 10316.0, "phase": "tpu_s1"}, {"step": 22101, "loss": 2.2098, "grad_norm": 0.1448, "tok_s": 10324.0, "phase": "tpu_s1"}, {"step": 22105, "loss": 2.159, "grad_norm": 0.1125, "tok_s": 10021.0, "phase": "tpu_s1"}, {"step": 22109, "loss": 2.2467, "grad_norm": 0.1064, "tok_s": 10280.0, "phase": "tpu_s1"}, {"step": 22113, "loss": 2.1506, "grad_norm": 0.0773, "tok_s": 10296.0, "phase": "tpu_s1"}, {"step": 22117, "loss": 2.1755, "grad_norm": 0.0818, "tok_s": 10292.0, "phase": "tpu_s1"}, {"step": 22121, "loss": 2.1975, "grad_norm": 0.0865, "tok_s": 10283.0, "phase": "tpu_s1"}, {"step": 22125, "loss": 2.1655, "grad_norm": 0.1031, "tok_s": 10291.0, "phase": "tpu_s1"}, {"step": 22129, "loss": 2.2011, "grad_norm": 0.0967, "tok_s": 10279.0, "phase": "tpu_s1"}, {"step": 22133, "loss": 2.2038, "grad_norm": 0.0816, "tok_s": 10166.0, "phase": "tpu_s1"}, {"step": 22137, "loss": 2.2128, "grad_norm": 0.0893, "tok_s": 10274.0, "phase": "tpu_s1"}, {"step": 22141, "loss": 2.1719, "grad_norm": 0.1443, "tok_s": 10268.0, "phase": "tpu_s1"}, {"step": 22145, "loss": 2.1823, "grad_norm": 0.132, "tok_s": 10284.0, "phase": "tpu_s1"}, {"step": 22149, "loss": 2.1828, "grad_norm": 0.0967, "tok_s": 10318.0, "phase": "tpu_s1"}, {"step": 22153, "loss": 2.2071, "grad_norm": 0.0861, "tok_s": 10300.0, "phase": "tpu_s1"}, {"step": 22157, "loss": 2.1815, "grad_norm": 0.0907, "tok_s": 10092.0, "phase": "tpu_s1"}, {"step": 22161, "loss": 2.2147, "grad_norm": 0.0832, "tok_s": 10295.0, "phase": "tpu_s1"}, {"step": 22165, "loss": 2.1533, "grad_norm": 0.0939, "tok_s": 10298.0, "phase": "tpu_s1"}, {"step": 22169, "loss": 2.1847, "grad_norm": 0.0941, "tok_s": 10299.0, "phase": "tpu_s1"}, {"step": 22173, "loss": 2.217, "grad_norm": 0.0894, "tok_s": 10310.0, "phase": "tpu_s1"}, {"step": 22177, "loss": 2.1756, "grad_norm": 0.0824, "tok_s": 10306.0, "phase": "tpu_s1"}, {"step": 22180, "loss": 2.2047, "grad_norm": 0.0855, "tok_s": 10308.0, "phase": "tpu_s1"}], "loss_tpu_s2": [{"step": 22181, "loss": 2.1995, "grad_norm": 0.0857, "tok_s": 8330.0, "phase": "tpu_s2"}, {"step": 22182, "loss": 2.1795, "grad_norm": 0.0971, "tok_s": 13295.0, "phase": "tpu_s2"}, {"step": 22183, "loss": 2.229, "grad_norm": 0.1117, "tok_s": 13198.0, "phase": "tpu_s2"}, {"step": 22184, "loss": 2.2181, "grad_norm": 0.1315, "tok_s": 13447.0, "phase": "tpu_s2"}, {"step": 22185, "loss": 2.1927, "grad_norm": 0.1261, "tok_s": 13408.0, "phase": "tpu_s2"}, {"step": 22186, "loss": 2.1883, "grad_norm": 0.1131, "tok_s": 13375.0, "phase": "tpu_s2"}, {"step": 22187, "loss": 2.195, "grad_norm": 0.1079, "tok_s": 13390.0, "phase": "tpu_s2"}, {"step": 22188, "loss": 2.2177, "grad_norm": 0.1162, "tok_s": 13410.0, "phase": "tpu_s2"}, {"step": 22189, "loss": 2.1686, "grad_norm": 0.1089, "tok_s": 13417.0, "phase": "tpu_s2"}, {"step": 22190, "loss": 2.1726, "grad_norm": 0.1001, "tok_s": 13488.0, "phase": "tpu_s2"}, {"step": 22191, "loss": 2.2275, "grad_norm": 0.0947, "tok_s": 13259.0, "phase": "tpu_s2"}, {"step": 22192, "loss": 2.1671, "grad_norm": 0.1221, "tok_s": 13224.0, "phase": "tpu_s2"}, {"step": 22193, "loss": 2.1834, "grad_norm": 0.1193, "tok_s": 13301.0, "phase": "tpu_s2"}]}};
+const LIVE_API_URL = "./status.json";
+const POLL_MS = 60000;
+
+let state = EMBEDDED_DATA;
+let lossMode = "full";
+let yearChart = null;
+let lossChart = null;
+
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+function fmtNum(n) {
+  return Number(n).toLocaleString("en-US");
+}
+
+function applyTheme(mode) {
+  const m = (mode === "light" || mode === "dark" || mode === "auto") ? mode : "auto";
+  document.documentElement.setAttribute("data-theme", m);
+  document.querySelectorAll("[data-set-theme]").forEach(btn => {
+    btn.classList.toggle("on", btn.getAttribute("data-set-theme") === m);
+  });
+  try { localStorage.setItem("ante_tracker_theme", m); } catch (_) {}
+  if (state) renderCharts(state, true);
+}
+
+// Initialize theme from saved preference (default: auto)
+(function initTheme() {
+  let saved = "auto";
+  try { saved = localStorage.getItem("ante_tracker_theme") || "auto"; } catch (_) {}
+  applyTheme(saved);
+  document.querySelectorAll("[data-set-theme]").forEach(btn => {
+    btn.addEventListener("click", () => applyTheme(btn.getAttribute("data-set-theme")));
+  });
+  if (window.matchMedia) {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onMq = () => {
+      if (document.documentElement.getAttribute("data-theme") === "auto" && state) {
+        renderCharts(state, true);
+      }
+    };
+    if (mq.addEventListener) mq.addEventListener("change", onMq);
+  }
+})();
+
+function render(d) {
+  state = d;
+  const p = d.progress;
+  const di = p.date;
+  const lv = d.live;
+  const loc = lv.session.location || {};
+
+  document.getElementById("hero-date").textContent = di.date_display;
+  document.getElementById("hero-sub").textContent =
+    `${di.year_pct.toFixed(1)}% through ${di.year} · Step ${fmtNum(p.current_step)} of ${fmtNum(p.total_steps)}`;
+  document.getElementById("hero-anchor").textContent =
+    di.historical_anchor
+      ? `Historical context (${di.year}): ${di.historical_anchor} · Top streams: ${(di.top_lanes || []).join(", ")}`
+      : `Top streams in ${di.year}: ${(di.top_lanes || []).join(", ")}`;
+
+  const pill = document.getElementById("status-pill");
+  const stxt = document.getElementById("status-text");
+  if (lv.is_running) {
+    pill.classList.remove("idle");
+    stxt.textContent = `LIVE · ${lv.session.accelerator || "V6E1"} · ${loc.city || "GCP"}`;
+  } else {
+    pill.classList.add("idle");
+    stxt.textContent = `PAUSED / SNARING · Last ${loc.city || "GCP"}`;
+  }
+
+  document.getElementById("overall-label").textContent =
+    `${p.trained_tokens_b.toFixed(2)}B / ${p.total_trained_tokens_b.toFixed(2)}B tok (${p.overall_pct.toFixed(2)}%) · ${p.years_elapsed.toFixed(1)} / 201 yrs`;
+  document.getElementById("overall-bar").style.width = `${Math.min(100, p.overall_pct)}%`;
+
+  document.getElementById("year-track-title").textContent =
+    `Year ${di.year} Stream (${di.year_raw_tokens_b.toFixed(2)}B raw tok · next vintage at step ${fmtNum(di.year_end_step)})`;
+  document.getElementById("year-label").textContent =
+    `${fmtNum(di.steps_done_in_year)} / ${fmtNum(di.steps_total_in_year)} steps (${di.year_pct.toFixed(1)}%) · ~${p.hours_to_next_vintage.toFixed(1)}h to ${di.year} vintage`;
+  document.getElementById("year-bar").style.width = `${Math.min(100, di.year_pct)}%`;
+
+  document.getElementById("kpi-tokens").textContent = `${p.trained_tokens_b.toFixed(2)}B`;
+  document.getElementById("kpi-steps").textContent = `${fmtNum(p.remaining_steps)} steps left to Dec 31, 2000`;
+
+  const gainPct = Math.round(((lv.tok_per_s / lv.slice1_tok_per_s) - 1) * 100);
+  const vsG4 = (lv.tok_per_s_per_cu / lv.g4_tok_per_s_per_cu).toFixed(2);
+  document.getElementById("kpi-toks").textContent = `${fmtNum(lv.tok_per_s)} tok/s`;
+  document.getElementById("kpi-eff").innerHTML =
+    `<span class="hi">${fmtNum(lv.tok_per_s_per_cu)} /CU</span> · ${lv.mfu_pct}% MFU · +${gainPct}% vs S1 · ${vsG4}× G4`;
+
+  document.getElementById("kpi-loss").textContent = lv.loss.toFixed(4);
+  document.getElementById("kpi-gn").textContent =
+    `grad_norm ${lv.grad_norm.toFixed(4)} · ${lv.step_seconds}s/step (${lv.optim_seconds}s opt)`;
+
+  document.getElementById("kpi-hbm").textContent = `${lv.hbm_used_gib} / ${lv.hbm_limit_gib} GiB`;
+  document.getElementById("kpi-sys").textContent =
+    `Peak ${lv.hbm_peak_gib} GiB · RAM ${lv.ram_free_gb} GB · Disk ${lv.disk_free_gb} GB free`;
+
+  document.getElementById("loc-zone").textContent = loc.zone || "europe-west4-a";
+  document.getElementById("pin-title").textContent = `${loc.city || "Eemshaven"}, ${loc.country || "Netherlands"}`;
+  document.getElementById("pin-sub").textContent = `${loc.zone || "europe-west4-a"} · ${lv.session.accelerator || "V6E1"} (${lv.cu_per_hr} CU/hr)`;
+
+  const specs = [
+    ["Datacenter", `${loc.city || "Eemshaven"}, ${loc.country || "Netherlands"} (GCP North Sea Wind DC)`],
+    ["Accelerator", "TPU v6e-1 Trillium · 2×256 MXU · 918 TF/s BF16"],
+    ["Active Stack", "JAX + Carbon v3 Pallas GDN/Conv1d · Selective Remat · Pure BF16"],
+    ["Storage Link", loc.r2_coloc || "Cloudflare R2 WEUR (341 MiB/s ↓ · 81.5 MB/s ↑)"],
+    ["Phase 1 (1800–1968)", "8× NVIDIA B300 · 332k tok/s (steps 1–21,813)"],
+    ["Phase 2 (1968–Now)", "Colab TPU v6e-1 · 5.09 CU/hr · lossless PyTorch↔JAX DCP"],
+  ];
+  document.getElementById("node-specs").innerHTML = specs
+    .map(([k, v]) => `<div class="spec-item"><span class="spec-k">${k}</span><span class="spec-v">${v}</span></div>`)
+    .join("");
+
+  const savedSet = new Set(d.vintages.saved || []);
+  const latestCkpt = (d.vintages.checkpoints_on_r2 && d.vintages.checkpoints_on_r2.length)
+    ? Math.max(...d.vintages.checkpoints_on_r2)
+    : p.current_step;
+  document.getElementById("vintage-meta").textContent =
+    `${savedSet.size} saved on R2 · latest ckpt step ${fmtNum(latestCkpt)}`;
+  const milestoneYears = Array.from(new Set([...(d.vintages.saved || []), di.year, di.year + 1, 1975, 1980, 1985, 1990, 1995, 2000])).sort((a, b) => a - b);
+  document.getElementById("vintage-chips").innerHTML = milestoneYears.map(y => {
+    if (savedSet.has(y)) return `<span class="vchip saved">✓ ${y}</span>`;
+    if (y === di.year) return `<span class="vchip active">■ ${y} (${di.year_pct.toFixed(0)}%)</span>`;
+    return `<span class="vchip">${y}</span>`;
+  }).join("");
+
+  document.getElementById("forecast-body").innerHTML = (d.economics.forecast || []).map(row =>
+    `<tr><td>${row.label}</td><td class="num">${row.date}</td><td class="num">${fmtNum(row.cu)}</td><td class="num">${row.pct}%</td></tr>`
+  ).join("");
+
+  document.getElementById("econ-note").textContent =
+    `Net yield: ${d.economics.net_tokens_per_1k_cu_b}B tok / 1k CU · ${d.economics.tokens_per_ultra_month_b}B tok / Ultra month (2,000 CU) · ~${d.economics.ultra_months_to_2000} Ultra-months to 2000.`;
+
+  document.getElementById("foot-left").textContent = `${d.model.name} · ${d.model.precision}`;
+  document.getElementById("foot-right").textContent =
+    `Updated ${d.generated_at_utc}${lv.heartbeat_utc ? " · TPU hb " + lv.heartbeat_utc : ""}`;
+
+  renderCharts(d, false);
+}
+
+function renderCharts(d, retheme) {
+  const fg = cssVar("--fg", "#14171a");
+  const muted = cssVar("--ink-muted", "#5c646d");
+  const grid = cssVar("--line", "#dad6cc");
+  const c1 = cssVar("--c1", "#1c5aa6");
+  const c2 = cssVar("--c2", "#0e7a49");
+  const c3 = cssVar("--c3", "#c26d0a");
+  const barTodo = cssVar("--bar-todo", "rgba(92,100,109,0.22)");
+
+  const bars = d.charts.year_bars || [];
+  const yLabels = bars.map(b => String(b.y));
+  const yVals = bars.map(b => b.raw_b);
+  const yColors = bars.map(b => b.status === "done" ? c1 : (b.status === "active" ? c3 : barTodo));
+
+  if (retheme && yearChart) { yearChart.destroy(); yearChart = null; }
+  if (yearChart) {
+    yearChart.data.labels = yLabels;
+    yearChart.data.datasets[0].data = yVals;
+    yearChart.data.datasets[0].backgroundColor = yColors;
+    yearChart.update("none");
+  } else {
+    yearChart = new Chart(document.getElementById("yearChart"), {
+      type: "bar",
+      data: {
+        labels: yLabels,
+        datasets: [{
+          label: "Raw Tokens (B)",
+          data: yVals,
+          backgroundColor: yColors,
+          borderWidth: 0,
+          barPercentage: 1.0,
+          categoryPercentage: 0.92,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            cornerRadius: 0,
+            callbacks: {
+              title: items => `Year ${items[0].label}`,
+              label: item => {
+                const b = bars[item.dataIndex];
+                return `${b.raw_b.toFixed(3)}B raw tok (${b.status.toUpperCase()}, ends step ${fmtNum(b.end_step)})`;
+              },
+            },
+          },
+        },
+        scales: {
+          x: {
+            grid: { display: false },
+            ticks: {
+              color: muted,
+              maxRotation: 0,
+              autoSkip: false,
+              callback: (_, idx) => {
+                const y = bars[idx]?.y;
+                return (y % 25 === 0) ? String(y) : "";
+              },
+              font: { size: 10 },
+            },
+          },
+          y: {
+            grid: { color: grid },
+            ticks: { color: muted, callback: v => `${v}B`, font: { size: 10 } },
+            title: { display: true, text: "Raw tokens / year", color: muted, font: { size: 10 } },
+          },
+        },
+      },
+    });
+  }
+
+  const b300 = (d.charts.loss_b300 || []).filter(p => lossMode === "full" || p.step >= 21650);
+  const s1 = d.charts.loss_tpu_s1 || [];
+  const s2 = d.charts.loss_tpu_s2 || [];
+
+  const ds = [
+    {
+      label: "8× B300 (1800–1968)",
+      data: b300.map(p => ({ x: p.step, y: p.loss })),
+      borderColor: c1,
+      backgroundColor: c1,
+      borderWidth: 1.8,
+      pointRadius: 0,
+      tension: 0.12,
+    },
+    {
+      label: "TPU v6e-1 Slice #1 (10.3k tok/s)",
+      data: s1.map(p => ({ x: p.step, y: p.loss })),
+      borderColor: c3,
+      backgroundColor: c3,
+      borderWidth: 2,
+      pointRadius: lossMode === "zoom" ? 1.5 : 0,
+      tension: 0.1,
+    },
+    {
+      label: "TPU v6e-1 Slice #2 (13.4k tok/s)",
+      data: s2.map(p => ({ x: p.step, y: p.loss })),
+      borderColor: c2,
+      backgroundColor: c2,
+      borderWidth: 2.4,
+      pointRadius: lossMode === "zoom" ? 3 : 2,
+      tension: 0.1,
+    },
+  ];
+
+  const yMin = lossMode === "zoom" ? 2.05 : 1.3;
+  const yMax = lossMode === "zoom" ? 2.38 : 3.4;
+
+  if (retheme && lossChart) { lossChart.destroy(); lossChart = null; }
+  if (lossChart) {
+    lossChart.data.datasets = ds;
+    lossChart.options.scales.y.min = yMin;
+    lossChart.options.scales.y.max = yMax;
+    lossChart.update("none");
+  } else {
+    lossChart = new Chart(document.getElementById("lossChart"), {
+      type: "line",
+      data: { datasets: ds },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        parsing: false,
+        plugins: {
+          legend: {
+            display: true,
+            position: "bottom",
+            labels: { color: fg, boxWidth: 10, boxHeight: 10, font: { size: 10.5 } },
+          },
+          tooltip: { cornerRadius: 0 },
+        },
+        scales: {
+          x: {
+            type: "linear",
+            grid: { color: grid },
+            ticks: { color: muted, callback: v => fmtNum(v), font: { size: 10 } },
+            title: { display: true, text: "Training step", color: muted, font: { size: 10 } },
+          },
+          y: {
+            min: yMin,
+            max: yMax,
+            grid: { color: grid },
+            ticks: { color: muted, font: { size: 10 } },
+            title: { display: true, text: "CE Loss", color: muted, font: { size: 10 } },
+          },
+        },
+      },
+    });
+  }
+}
+
+document.getElementById("btn-full").addEventListener("click", () => {
+  lossMode = "full";
+  document.getElementById("btn-full").classList.add("on");
+  document.getElementById("btn-zoom").classList.remove("on");
+  renderCharts(state, false);
+});
+document.getElementById("btn-zoom").addEventListener("click", () => {
+  lossMode = "zoom";
+  document.getElementById("btn-zoom").classList.add("on");
+  document.getElementById("btn-full").classList.remove("on");
+  renderCharts(state, false);
+});
+
+render(EMBEDDED_DATA);
+
+if (typeof ResizeObserver !== "undefined") {
+  const ro = new ResizeObserver(() => {
+    if (yearChart) yearChart.resize();
+    if (lossChart) lossChart.resize();
+  });
+  ro.observe(document.body);
+}
+
+async function pollLive() {
+  if (!LIVE_API_URL) return;
+  try {
+    const sep = LIVE_API_URL.includes("?") ? "&" : "?";
+    const resp = await fetch(`${LIVE_API_URL}${sep}_t=${Date.now()}`, { cache: "no-store" });
+    if (resp.ok) {
+      const fresh = await resp.json();
+      render(fresh);
+    }
+  } catch (_) {}
+}
+if (LIVE_API_URL) {
+  // Fetch fresh status.json immediately on load (especially for GitHub Pages!) then periodically
+  pollLive();
+  setInterval(pollLive, POLL_MS);
+}
+</script>
+</body>
+</html>
